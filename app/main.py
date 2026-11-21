@@ -1,17 +1,20 @@
-import socket
+import asyncio
 import os
 
-
-def main():
-    server_socket = socket.create_server(("localhost", 6379), reuse_port=(os.name != "nt")) #os.name instead of True because Windows doesn't allow it
-    connection, address = server_socket.accept()
-
+async def handle_client(reader, writer):
     while True:
-        data = connection.recv(1024)
+        data = await reader.read(1024)
         if not data:
             break
-        connection.sendall(b"+PONG\r\n")
+        writer.write(b"+PONG\r\n")
+        await writer.drain()
+    writer.close()
+    await writer.wait_closed()
 
+asyncdef main():
+    server = await asyncio.start_server(handle_client, "localhost", 6379)
+    async with server:
+        await server.serve_forever()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
