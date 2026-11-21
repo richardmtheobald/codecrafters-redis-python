@@ -8,7 +8,7 @@ def main():
 
     while True:
         data = connection.recv(1024)
-        if not data;
+        if not data:
             break
         connection.sendall(b"+PONG\r\n")
 
