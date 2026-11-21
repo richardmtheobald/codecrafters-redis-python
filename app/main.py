@@ -11,7 +11,7 @@ async def handle_client(reader, writer):
     writer.close()
     await writer.wait_closed()
 
-asyncdef main():
+async def main():
     server = await asyncio.start_server(handle_client, "localhost", 6379)
     async with server:
         await server.serve_forever()
