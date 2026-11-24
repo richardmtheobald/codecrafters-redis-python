@@ -1,5 +1,7 @@
 import asyncio
 import os
+import time
+import random
 
 store = {}
 
@@ -19,11 +21,24 @@ async def handle_client(reader, writer):
             case [b"ECHO", message]:
                 writer.write(encode_bulk_string(message))
             case [b"SET", key, value, *options]:
-                store[key] = value
+                expires_at = None
+                i = 0
+                while i < len(options):
+                    option = options[i].upper()
+                    if option == b"PX":
+                        expires_at = time.monotonic() + int(options[i+1]) / 1000
+                        i+=2
+                    elif option == b"EX":
+                        expires_at = time.monotonic() + int(options[i+1])
+                        i+=2
+                    else:
+                        i+=1
+                store[key] = (value, expires_at)
                 writer.write(b"+OK\r\n")
             case [b"GET", key]:
-                if key in store:
-                    writer.write(encode_bulk_string(store[key]))
+                value=get_value(key)
+                if value is not None:
+                    writer.write(encode_bulk_string(value))
                 else:
                     writer.write(b"$-1\r\n")
 
@@ -31,6 +46,26 @@ async def handle_client(reader, writer):
 
     writer.close()
     await writer.wait_closed()
+
+def remove_value_if_expired(key):
+    entry = store.get(key)
+    if entry is None:
+        return
+    value, expires_at = entry
+    if expires_at is not None and time.monotonic() >= expires_at:
+        del store[key]
+
+def get_value(key):
+    num = random.randint(1, 50)
+    if num == 7:
+        for item in list(store):
+            remove_value_if_expired(item) # simple garbage collection for expired items in store
+
+    remove_value_if_expired(key)
+    entry = store.get(key)
+    if entry is None:
+        return None
+    return entry[0]
 
 def parse_resp(data, position=0):
     type_char = data[position:position+1]
