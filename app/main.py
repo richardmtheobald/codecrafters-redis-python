@@ -18,8 +18,10 @@ async def handle_client(reader, writer):
         match [name, *command[1:]]:
             case [b"PING"]:
                 writer.write(b"+PONG\r\n")
+
             case [b"ECHO", message]:
                 writer.write(encode_bulk_string(message))
+
             case [b"SET", key, value, *options]:
                 expires_at = None
                 i = 0
@@ -35,6 +37,7 @@ async def handle_client(reader, writer):
                         i+=1
                 store[key] = (value, expires_at)
                 writer.write(b"+OK\r\n")
+
             case [b"GET", key]:
                 value=get_value(key)
                 if value is not None:
@@ -42,10 +45,21 @@ async def handle_client(reader, writer):
                 else:
                     writer.write(b"$-1\r\n")
 
+            case [b"RPUSH", key, *elements]:
+                current = get_value(key)
+                if current is None:
+                    current = []
+                    store[key] = (current, None)
+                current.extend(elements)
+                writer.write(encode_integer(len(current)))
+
         await writer.drain()
 
     writer.close()
     await writer.wait_closed()
+
+def encode_integer(number):
+    return b":" + str(number).encode() + b"\r\n"
 
 def remove_value_if_expired(key):
     entry = store.get(key)
@@ -57,9 +71,9 @@ def remove_value_if_expired(key):
 
 def get_value(key):
     num = random.randint(1, 50)
-    if num == 7:
+    if num == 7:# simple garbage collection for expired items in store
         for item in list(store):
-            remove_value_if_expired(item) # simple garbage collection for expired items in store
+            remove_value_if_expired(item)
 
     remove_value_if_expired(key)
     entry = store.get(key)
