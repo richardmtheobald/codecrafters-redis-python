@@ -1,6 +1,8 @@
 import asyncio
 import os
 
+store = {}
+
 async def handle_client(reader, writer):
     while True:
         data = await reader.read(1024)
@@ -16,6 +18,14 @@ async def handle_client(reader, writer):
                 writer.write(b"+PONG\r\n")
             case [b"ECHO", message]:
                 writer.write(encode_bulk_string(message))
+            case [b"SET", key, value, *options]:
+                store[key] = value
+                writer.write(b"+OK\r\n")
+            case [b"GET", key]:
+                if key in store:
+                    writer.write(encode_bulk_string(store[key]))
+                else:
+                    writer.write(b"$-1\r\n")
 
         await writer.drain()
 
