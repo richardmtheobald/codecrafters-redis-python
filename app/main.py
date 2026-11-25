@@ -4,6 +4,7 @@ import time
 import random
 
 store = {}
+waiters = {}
 
 async def handle_client(reader, writer):
     while True:
@@ -51,6 +52,7 @@ async def handle_client(reader, writer):
                     current = []
                     store[key] = (current, None)
                 current.extend(elements)
+                serve_waiters(key)
                 writer.write(encode_integer(len(current)))
 
             case [b"LRANGE", key, start, stop]:
@@ -72,6 +74,7 @@ async def handle_client(reader, writer):
                     current = []
                     store[key] = (current, None)
                 current[0:0] = reversed(elements)
+                serve_waiters(key)
                 writer.write(encode_integer(len(current)))
 
             case [b"LLEN", key]:
@@ -91,11 +94,35 @@ async def handle_client(reader, writer):
                 del current[:count]
                 writer.write(encode_array(popped))
 
+            case [b"BLPOP", key, timeout]:
+                current=get_value(key)
+                if current:
+                    writer.write(encode_array([key, current.pop(0)]))
+                else:
+                    future = asyncio.get_running_loop().create_future()
+                    waiters.setdefault(key, []).append(future)
+                    seconds = float(timeout)
+                    try:
+                        element = await asyncio.wait_for(future, seconds if seconds > 0 else None)
+                        writer.write(encode_array([key,element]))
+                    except TimeoutError:
+                        if future in waiters[key]:
+                            waiters[key].remove(future)
+                        writer.write(b"*-1\r\n")
+
 
         await writer.drain()
 
     writer.close()
     await writer.wait_closed()
+
+def serve_waiters(key):
+    current = get_value(key)
+    queue = waiters.get(key, [])
+    while current and queue:
+        future = queue.pop(0)
+        if not future.done():
+            future.set_result(current.pop(0))
 
 def encode_array(items):
     return b"*" + str(len(items)).encode() + b"\r\n" + b"".join(encode_bulk_string(item) for item in items)
