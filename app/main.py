@@ -52,8 +52,9 @@ async def handle_client(reader, writer):
                     current = []
                     store[key] = (current, None)
                 current.extend(elements)
+                length = len(current)
                 serve_waiters(key)
-                writer.write(encode_integer(len(current)))
+                writer.write(encode_integer(length))
 
             case [b"LRANGE", key, start, stop]:
                 items = get_value(key) or []
@@ -74,8 +75,9 @@ async def handle_client(reader, writer):
                     current = []
                     store[key] = (current, None)
                 current[0:0] = reversed(elements)
+                length = len(current)
                 serve_waiters(key)
-                writer.write(encode_integer(len(current)))
+                writer.write(encode_integer(length))
 
             case [b"LLEN", key]:
                 writer.write(encode_integer(len(get_value(key) or [])))
