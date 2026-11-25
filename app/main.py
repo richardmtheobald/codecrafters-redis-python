@@ -53,10 +53,26 @@ async def handle_client(reader, writer):
                 current.extend(elements)
                 writer.write(encode_integer(len(current)))
 
+            case [b"LRANGE", key, start, stop]:
+                items = get_value(key) or []
+                start = int(start)
+                stop = int(stop)
+                if start < 0:
+                    start = max(len(items) + start, 0)
+                if stop < 0:
+                    stop = len(items) + stop
+                if stop < 0:
+                    writer.write(encode_array([]))
+                else:
+                    writer.write(encode_array(items[start:stop + 1]))
+
         await writer.drain()
 
     writer.close()
     await writer.wait_closed()
+
+def encode_array(items):
+    return b"*" + str(len(items)).encode() + b"\r\n" + b"".join(encode_bulk_string(item) for item in items)
 
 def encode_integer(number):
     return b":" + str(number).encode() + b"\r\n"
