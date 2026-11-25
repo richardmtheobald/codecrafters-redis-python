@@ -66,6 +66,32 @@ async def handle_client(reader, writer):
                 else:
                     writer.write(encode_array(items[start:stop + 1]))
 
+            case [b"LPUSH", key, *elements]:
+                current = get_value(key)
+                if current is None:
+                    current = []
+                    store[key] = (current, None)
+                current[0:0] = reversed(elements)
+                writer.write(encode_integer(len(current)))
+
+            case [b"LLEN", key]:
+                writer.write(encode_integer(len(get_value(key) or [])))
+
+            case [b"LPOP", key]:
+                current = get_value(key)
+                if not current:
+                    writer.write(b"$-1\r\n")
+                else:
+                    writer.write(encode_bulk_string(current.pop(0)))
+
+            case [b"LPOP", key, count]:
+                current = get_value(key) or []
+                count = int(count)
+                popped = current[:count]
+                del current[:count]
+                writer.write(encode_array(popped))
+
+
         await writer.drain()
 
     writer.close()
